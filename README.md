@@ -82,4 +82,4 @@ npm run build
 npx wrangler deploy
 ```
 
-The GitHub Actions workflow verifies a clean install, Astro sync, lint, and build on pushes and pull requests to `master`.
+The GitHub Actions workflow verifies a clean install, Astro sync, lint, and build on pushes and pull requests to `main`.

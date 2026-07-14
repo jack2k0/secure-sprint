@@ -1,0 +1,38 @@
+---
+import Layout from "@/layouts/Layout.astro";
+---
+
+<Layout title="SecureSprint">
+  <main class="min-h-screen bg-slate-950 px-4 py-16 text-white sm:px-6">
+    <div class="mx-auto max-w-4xl py-16 text-center">
+      <p class="text-sm font-semibold tracking-wide text-cyan-300 uppercase">SecureSprint</p>
+      <h1 class="mt-4 text-4xl font-bold tracking-tight sm:text-6xl">A backlog your security engineers can act on.</h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+        Turn high-level Cybersecurity work into clear implementation steps, Definition of Done, and a Jira-ready story.
+      </p>
+      <a
+        href="/auth/signin"
+        class="mt-9 inline-block rounded-lg bg-cyan-500 px-5 py-3 font-semibold text-slate-950 hover:bg-cyan-400"
+      >
+        Open SecureSprint
+      </a>
+    </div>
+    <section class="mx-auto grid max-w-4xl gap-4 md:grid-cols-3">
+      <article class="rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <h2 class="font-semibold">Capture drafts</h2><p class="mt-2 text-sm text-slate-300">
+          Save an idea now and complete it when the team refines the work.
+        </p>
+      </article>
+      <article class="rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <h2 class="font-semibold">Spot missing detail</h2><p class="mt-2 text-sm text-slate-300">
+          A deterministic readiness check highlights exactly what an engineer still needs.
+        </p>
+      </article>
+      <article class="rounded-xl border border-slate-700 bg-slate-900 p-5">
+        <h2 class="font-semibold">Export to Jira later</h2><p class="mt-2 text-sm text-slate-300">
+          Move cards through refinement and download an import-ready CSV when planning is done.
+        </p>
+      </article>
+    </section>
+  </main>
+</Layout>

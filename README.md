@@ -189,6 +189,24 @@ curl -sS -b "$COOKIE_JAR" -X DELETE "$BASE_URL/api/stories/$STORY_ID" \
 
 Live board auto-refresh (S-07): the open `/app` board polls `GET /api/stories` every few seconds (and optionally listens to Supabase Realtime) so agent/API changes appear without F5. Dirty story editors show a reload banner instead of silent overwrite.
 
+### Backlog CLI (agents)
+
+```bash
+export BASE_URL=http://127.0.0.1:4321
+export DEMO_EMAIL=...
+export DEMO_PASSWORD=...
+npm run backlog -- help
+npm run backlog -- list
+npm run backlog -- create "Title"
+npm run backlog -- readiness <id>
+```
+
+Uses the same authenticated HTTP API as the UI (cookie session after sign-in). Not service-role SQL.
+
+### Optional AI story review
+
+Set server secret `XAI_API_KEY` (SpaceXAI / xAI). In the story editor, **Suggest gaps with AI** calls `POST /api/stories/:id/ai-review`. Hard readiness stays deterministic; missing key returns hard-only review without breaking the app.
+
 ## Submission checklist
 
 After Supabase is configured, capture these in the latest Chrome:

@@ -7,6 +7,7 @@
     "build": "astro build",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "backlog": "node scripts/backlog-cli.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "lint": "eslint .",

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Archive, Download, GripVertical, Plus, Save, X } from "lucide-react";
+import { Archive, Download, GripVertical, Plus, Save, Sparkles, X } from "lucide-react";
+import type { SoftGap, StoryAiReviewResult } from "@/lib/ai/story-review";
 import { isStoryEditorDirty, resolveLiveBoardUpdate, type StoryEditorSnapshot } from "@/lib/board-sync";
 import { assessStoryReadiness } from "@/lib/readiness";
 import { backlogToCsv } from "@/lib/csv";
@@ -61,7 +62,15 @@ function newChecklistItem(): DefinitionOfDoneItem {
   return { id: crypto.randomUUID(), label: "", completed: false };
 }
 
-function StoryCard({ story, onOpen }: { story: BacklogStory; onOpen: (story: BacklogStory) => void }) {
+function StoryCard({
+  story,
+  assigneeName,
+  onOpen,
+}: {
+  story: BacklogStory;
+  assigneeName: string | null;
+  onOpen: (story: BacklogStory) => void;
+}) {
   const readiness = assessStoryReadiness({
     goal: story.goal,
     recipientOrArea: story.recipientOrArea,
@@ -91,6 +100,7 @@ function StoryCard({ story, onOpen }: { story: BacklogStory; onOpen: (story: Bac
       <span className={readiness.isReady ? "text-xs font-medium text-emerald-700" : "text-xs text-amber-700"}>
         {readiness.isReady ? "Ready for Jira" : `${readiness.missingFields.length} items to refine`}
       </span>
+      {assigneeName ? <span className="mt-1 block text-xs text-slate-500">Assigned to {assigneeName}</span> : null}
     </button>
   );
 }
@@ -119,6 +129,9 @@ function StoryEditor({
   const [baseline, setBaseline] = useState(story);
   const [draft, setDraft] = useState(story);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
+  const [aiReview, setAiReview] = useState<StoryAiReviewResult | null>(null);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const readiness = assessStoryReadiness({
     goal: draft.goal,
@@ -176,6 +189,57 @@ function StoryEditor({
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function requestAiReview() {
+    setIsReviewing(true);
+    setAiNotice(null);
+    try {
+      // Persist latest draft without closing the editor so the server reviews saved content.
+      if (isStoryEditorDirty(baseline, draft)) {
+        const payload = {
+          title: draft.title,
+          goal: draft.goal,
+          recipientOrArea: draft.recipientOrArea,
+          description: draft.description,
+          implementationSteps: draft.implementationSteps.filter((item) => item.trim()),
+          definitionOfDone: draft.definitionOfDone,
+          definitionOfDoneChecklist: draft.definitionOfDoneChecklist.filter((item) => item.label.trim()),
+          assignedTo: draft.assignedTo,
+          boardPosition: draft.boardPosition,
+        };
+        const saved = await requestJson<{ story: BacklogStory }>(`/api/stories/${draft.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        setBaseline(saved.story);
+        setDraft(saved.story);
+        onEditorStateChange({ dirty: false, draft: null });
+        onSaved(saved.story);
+      }
+      const response = await requestJson<{
+        review: StoryAiReviewResult;
+        available: boolean;
+        error?: string;
+      }>(`/api/stories/${draft.id}/ai-review`, { method: "POST", body: "{}" });
+      setAiReview(response.review);
+      if (!response.available) {
+        setAiNotice(response.error ?? "AI review unavailable; hard readiness only.");
+      }
+    } catch (cause) {
+      setAiNotice(cause instanceof Error ? cause.message : "Unable to run AI review.");
+    } finally {
+      setIsReviewing(false);
+    }
+  }
+
+  function applySuggestedText(gap: SoftGap) {
+    if (!gap.suggestedText) return;
+    if (gap.field === "goal") updateText("goal", gap.suggestedText);
+    else if (gap.field === "recipientOrArea") updateText("recipientOrArea", gap.suggestedText);
+    else if (gap.field === "description") updateText("description", gap.suggestedText);
+    else if (gap.field === "definitionOfDone") updateText("definitionOfDone", gap.suggestedText);
+    else if (gap.field === "title") updateText("title", gap.suggestedText);
   }
 
   async function archive() {
@@ -417,20 +481,67 @@ function StoryEditor({
             </fieldset>
           </div>
 
-          <aside className="h-fit rounded-xl bg-slate-50 p-4">
-            <h3 className="font-semibold text-slate-900">Readiness check</h3>
-            {readiness.isReady ? (
-              <p className="mt-2 text-sm font-medium text-emerald-700">Ready for Jira</p>
-            ) : (
-              <>
-                <p className="mt-2 text-sm text-slate-600">Complete these before transfer:</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
-                  {readiness.missingFields.map((field) => (
-                    <li key={field}>{MISSING_FIELD_LABEL[field]}</li>
-                  ))}
-                </ul>
-              </>
-            )}
+          <aside className="h-fit space-y-4 rounded-xl bg-slate-50 p-4">
+            <div>
+              <h3 className="font-semibold text-slate-900">Readiness check</h3>
+              {readiness.isReady ? (
+                <p className="mt-2 text-sm font-medium text-emerald-700">Ready for Jira</p>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-slate-600">Complete these before transfer:</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-800">
+                    {readiness.missingFields.map((field) => (
+                      <li key={field}>{MISSING_FIELD_LABEL[field]}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900">AI quality review</h3>
+              <p className="mt-1 text-xs text-slate-500">Optional. Hard readiness stays deterministic.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  void requestAiReview();
+                }}
+                disabled={isReviewing || isSaving}
+                className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+              >
+                <Sparkles className="size-4 text-cyan-700" />
+                {isReviewing ? "Reviewing…" : "Suggest gaps with AI"}
+              </button>
+              {aiNotice ? <p className="mt-2 text-xs text-amber-800">{aiNotice}</p> : null}
+              {aiReview ? (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm text-slate-700">{aiReview.summary}</p>
+                  <ul className="space-y-2">
+                    {aiReview.softGaps.map((gap) => (
+                      <li
+                        key={`${gap.field}-${gap.message}`}
+                        className="rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-700"
+                      >
+                        <p className="font-semibold text-slate-900">
+                          {gap.severity}: {gap.field}
+                        </p>
+                        <p className="mt-1">{gap.message}</p>
+                        {gap.suggestedText ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              applySuggestedText(gap);
+                            }}
+                            className="mt-2 font-semibold text-cyan-700 hover:underline"
+                          >
+                            Apply suggested text
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
           </aside>
         </div>
         {error ? <p className="mx-6 mb-4 rounded bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
@@ -736,7 +847,16 @@ export default function BacklogWorkspace({ supabaseUrl = "", supabaseAnonKey = "
                 </div>
                 <div className="space-y-3">
                   {storiesByPosition[position].map((story) => (
-                    <StoryCard key={story.id} story={story} onOpen={openStory} />
+                    <StoryCard
+                      key={story.id}
+                      story={story}
+                      assigneeName={
+                        story.assignedTo
+                          ? (members.find((member) => member.id === story.assignedTo)?.displayName ?? null)
+                          : null
+                      }
+                      onOpen={openStory}
+                    />
                   ))}
                   {storiesByPosition[position].length === 0 ? (
                     <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
@@ -751,12 +871,8 @@ export default function BacklogWorkspace({ supabaseUrl = "", supabaseAnonKey = "
       </main>
       {selectedStory ? (
         <StoryEditor
-          key={
-            editorDirty || staleSelected
-              ? selectedStory.id
-              : `${selectedStory.id}:${(remoteSelected ?? selectedStory).updatedAt}`
-          }
-          story={remoteSelected ?? selectedStory}
+          key={selectedStory.id}
+          story={editorDirty || staleSelected ? selectedStory : (remoteSelected ?? selectedStory)}
           members={members}
           remoteStale={staleSelected}
           remoteArchived={selectedArchivedRemote}

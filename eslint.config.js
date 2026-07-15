@@ -70,6 +70,10 @@ const astroConfig = tseslint.config({
 
 export default tseslint.config(
   includeIgnoreFile(gitignorePath),
+  {
+    // Node helper scripts (badge capture, CLIs) are not type-checked app code.
+    ignores: ["tests/e2e/**/*.mjs", "scripts/**"],
+  },
   baseConfig,
   reactConfig,
   eslintPluginAstro.configs["flat/recommended"],

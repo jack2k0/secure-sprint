@@ -35,4 +35,15 @@ The remaining three low findings are in the Astro/Cloudflare adapter chain (`ast
 
 The built landing page and `/auth/signin` route still need a browser smoke test in the latest Chrome. This is intentionally left as a manual course-review check; it cannot be proven by the build alone.
 
-**Plan-review residual (2026-07-15):** Progress items 1.3 and 2.4 closed from remediation/diff evidence already recorded above. Item 3.5 remains open; F-01 is treated as complete for unblocking product work with **accepted residual risk** that Chrome smoke is still required before public exposure.
+**Plan-review residual (2026-07-15):** Progress items 1.3 and 2.4 closed from remediation/diff evidence. **3.5 closed 2026-07-16** via Playwright smoke of `/` and `/auth/signin` (see below).
+
+
+## F-01 Chrome smoke (closed 2026-07-16)
+
+Playwright headless capture against local `npm run dev`:
+
+- `GET /` returned 200; landing screenshot saved.
+- `GET /auth/signin` returned 200; Email/Password form present; screenshot saved.
+- Full sign-in reached `/app` (post-login board screenshot).
+
+Progress item 3.5 is marked done. Residual risk for production deploy remains separate (Cloudflare secrets / wrangler auth).

@@ -208,4 +208,4 @@ No data migration is involved. If the standard audit proposal requires a major v
 
 #### Manual
 
-- [ ] 3.5 Smoke-test landing and sign-in routes in Chrome — residual: accepted for F-01 close; build/lint/sync passed; Chrome smoke still recommended before public deploy (see verification.md)
+- [x] 3.5 Smoke-test landing and sign-in routes in Chrome — proven 2026-07-16 via Playwright capture (GET / and /auth/signin 200; form visible; screenshot evidence)

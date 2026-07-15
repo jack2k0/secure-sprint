@@ -243,7 +243,7 @@ function StoryEditor({
               <legend className="px-1 text-sm font-semibold text-slate-800">Implementation steps</legend>
               <div className="space-y-2">
                 {draft.implementationSteps.map((step, index) => (
-                  <div key={`${index}-${step}`} className="flex gap-2">
+                  <div key={index} className="flex gap-2">
                     <input
                       value={step}
                       onChange={(event) =>
@@ -408,6 +408,7 @@ export default function BacklogWorkspace() {
   const [newTitle, setNewTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isExportPreviewOpen, setIsExportPreviewOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([requestJson<WorkspaceResponse>("/api/stories"), requestJson<MembersResponse>("/api/team-members")])
@@ -426,6 +427,7 @@ export default function BacklogWorkspace() {
       ) as Record<BoardPosition, BacklogStory[]>,
     [stories],
   );
+  const csvPreview = useMemo(() => backlogToCsv(stories, members), [stories, members]);
 
   async function createStory(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -472,10 +474,9 @@ export default function BacklogWorkspace() {
     }
   }
 
-  function exportCsv() {
-    const csv = backlogToCsv(stories, members);
+  function downloadCsv() {
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    link.href = URL.createObjectURL(new Blob([csvPreview], { type: "text/csv;charset=utf-8" }));
     link.download = "securesprint-backlog.csv";
     link.click();
     URL.revokeObjectURL(link.href);
@@ -492,7 +493,7 @@ export default function BacklogWorkspace() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={exportCsv}
+              onClick={() => setIsExportPreviewOpen(true)}
               disabled={stories.length === 0}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
             >
@@ -576,6 +577,54 @@ export default function BacklogWorkspace() {
           onArchived={(id) => setStories((current) => current.filter((story) => story.id !== id))}
           onClose={() => setSelectedStory(null)}
         />
+      ) : null}
+      {isExportPreviewOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="csv-preview-title"
+        >
+          <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <p className="text-sm font-medium text-cyan-700">Jira handoff</p>
+                <h2 id="csv-preview-title" className="text-lg font-bold text-slate-950">
+                  CSV export preview
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsExportPreviewOpen(false)}
+                className="rounded p-2 text-slate-500 hover:bg-slate-100"
+                aria-label="Close CSV preview"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <pre className="max-h-96 overflow-auto bg-slate-950 p-5 text-xs leading-5 text-slate-100">{csvPreview}</pre>
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setIsExportPreviewOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadCsv();
+                  setIsExportPreviewOpen(false);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-800"
+              >
+                <Download className="size-4" />
+                Download CSV
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   );

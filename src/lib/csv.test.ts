@@ -29,4 +29,10 @@ describe("backlogToCsv", () => {
     expect(csv).toContain('"Yes"');
     expect(csv.split("\r\n")).toHaveLength(2);
   });
+
+  it("neutralizes formula-like values before exporting to a spreadsheet", () => {
+    const csv = backlogToCsv([{ ...story, title: '=IMPORTXML("https://example.test")' }], []);
+
+    expect(csv).toContain(`"'=IMPORTXML(""https://example.test"")"`);
+  });
 });

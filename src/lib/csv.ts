@@ -1,7 +1,8 @@
 import type { BacklogStory, TeamMember } from "@/types";
 
 function escapeCell(value: string) {
-  return `"${value.replaceAll('"', '""')}"`;
+  const safeValue = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return `"${safeValue.replaceAll('"', '""')}"`;
 }
 
 export function backlogToCsv(stories: BacklogStory[], members: TeamMember[]) {

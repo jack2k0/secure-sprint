@@ -183,7 +183,7 @@ No data migration is involved. If the standard audit proposal requires a major v
 
 #### Manual
 
-- [ ] 1.3 Review the remediation scope
+- [x] 1.3 Review the remediation scope
 
 ### Phase 2: Apply Compatible Dependency and Lockfile Updates
 
@@ -195,7 +195,7 @@ No data migration is involved. If the standard audit proposal requires a major v
 
 #### Manual
 
-- [ ] 2.4 Review that the dependency diff matches the approved scope
+- [x] 2.4 Review that the dependency diff matches the approved scope
 
 ### Phase 3: Prove the Cloudflare Starter Still Works
 
@@ -208,4 +208,4 @@ No data migration is involved. If the standard audit proposal requires a major v
 
 #### Manual
 
-- [ ] 3.5 Smoke-test landing and sign-in routes in Chrome
+- [ ] 3.5 Smoke-test landing and sign-in routes in Chrome — residual: accepted for F-01 close; build/lint/sync passed; Chrome smoke still recommended before public deploy (see verification.md)

@@ -2,10 +2,16 @@ import type { APIRoute } from "astro";
 import { ZodError } from "zod";
 import { jsonError, parseJson, parseSupabaseResult, zodMessage } from "@/lib/api-response";
 import { mapStory } from "@/lib/backlog";
+import { readinessForStory } from "@/lib/readiness";
 import { createStorySchema } from "@/lib/story-schema";
 import { createClient } from "@/lib/supabase";
+import type { BacklogStory } from "@/types";
 
 export const prerender = false;
+
+function storyWithReadiness(story: BacklogStory) {
+  return { story, readiness: readinessForStory(story) };
+}
 
 export const GET: APIRoute = async (context) => {
   const supabase = createClient(context.request.headers, context.cookies);
@@ -22,7 +28,11 @@ export const GET: APIRoute = async (context) => {
 
   if (error) return jsonError(error.message, 500);
   if (!Array.isArray(data)) return jsonError("Unexpected story list response.", 500);
-  return Response.json({ stories: data.map(mapStory) });
+  const stories = data.map(mapStory);
+  return Response.json({
+    stories,
+    readinessById: Object.fromEntries(stories.map((story) => [story.id, readinessForStory(story)])),
+  });
 };
 
 export const POST: APIRoute = async (context) => {
@@ -40,7 +50,7 @@ export const POST: APIRoute = async (context) => {
     );
 
     if (error) return jsonError(error.message, 500);
-    return Response.json({ story: mapStory(data) }, { status: 201 });
+    return Response.json(storyWithReadiness(mapStory(data)), { status: 201 });
   } catch (error) {
     if (error instanceof ZodError) return jsonError(zodMessage(error), 400);
     return jsonError("Unable to create the backlog story.", 400);

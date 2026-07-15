@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { assessStoryReadiness, type StoryReadinessInput } from "./readiness";
+import { assessStoryReadiness, readinessForStory, type StoryReadinessInput } from "./readiness";
+import type { BacklogStory } from "@/types";
 
 const readyStory: StoryReadinessInput = {
   goal: "Protect privileged accounts from unnecessary access.",
@@ -52,6 +53,44 @@ describe("assessStoryReadiness", () => {
     expect(assessStoryReadiness({ ...readyStory, definitionOfDoneChecklist: ["\n"] })).toEqual({
       isReady: false,
       missingFields: ["definitionOfDoneChecklist"],
+    });
+  });
+});
+
+describe("readinessForStory", () => {
+  const completeStory = {
+    goal: readyStory.goal,
+    recipientOrArea: readyStory.recipientOrArea,
+    description: readyStory.description,
+    implementationSteps: [...(readyStory.implementationSteps ?? [])],
+    definitionOfDone: readyStory.definitionOfDone,
+    definitionOfDoneChecklist: [
+      { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", label: "Evidence attached", completed: true },
+    ],
+  } satisfies Pick<
+    BacklogStory,
+    | "goal"
+    | "recipientOrArea"
+    | "description"
+    | "implementationSteps"
+    | "definitionOfDone"
+    | "definitionOfDoneChecklist"
+  >;
+
+  it("returns the same ready result as assessStoryReadiness for a complete story", () => {
+    expect(readinessForStory(completeStory)).toEqual(assessStoryReadiness(readyStory));
+  });
+
+  it("returns incomplete when required fields are blank", () => {
+    expect(
+      readinessForStory({
+        ...completeStory,
+        goal: null,
+        definitionOfDoneChecklist: [],
+      }),
+    ).toEqual({
+      isReady: false,
+      missingFields: ["goal", "definitionOfDoneChecklist"],
     });
   });
 });

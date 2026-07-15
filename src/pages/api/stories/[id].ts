@@ -2,14 +2,19 @@ import type { APIRoute } from "astro";
 import { ZodError } from "zod";
 import { jsonError, parseJson, parseSupabaseResult, zodMessage } from "@/lib/api-response";
 import { mapStory } from "@/lib/backlog";
-import { assessStoryReadiness } from "@/lib/readiness";
+import { readinessForStory } from "@/lib/readiness";
 import { toDatabaseUpdate, updateStorySchema } from "@/lib/story-schema";
 import { createClient } from "@/lib/supabase";
+import type { BacklogStory } from "@/types";
 
 export const prerender = false;
 
 function storyId(context: Parameters<APIRoute>[0]) {
   return context.params.id;
+}
+
+function storyWithReadiness(story: BacklogStory) {
+  return { story, readiness: readinessForStory(story) };
 }
 
 export const GET: APIRoute = async (context) => {
@@ -25,7 +30,7 @@ export const GET: APIRoute = async (context) => {
   if (!data) return jsonError("Story not found.", 404);
   const story = mapStory(data);
   if (story.archivedAt) return jsonError("Story not found.", 404);
-  return Response.json({ story });
+  return Response.json(storyWithReadiness(story));
 };
 
 export const PATCH: APIRoute = async (context) => {
@@ -43,16 +48,16 @@ export const PATCH: APIRoute = async (context) => {
     if (!existingResult.data) return jsonError("Story not found.", 404);
 
     const existingStory = mapStory(existingResult.data);
-    const readiness = assessStoryReadiness({
+    const proposedStory: BacklogStory = {
+      ...existingStory,
       goal: input.goal !== undefined ? input.goal : existingStory.goal,
       recipientOrArea: input.recipientOrArea !== undefined ? input.recipientOrArea : existingStory.recipientOrArea,
       description: input.description !== undefined ? input.description : existingStory.description,
       implementationSteps: input.implementationSteps ?? existingStory.implementationSteps,
       definitionOfDone: input.definitionOfDone !== undefined ? input.definitionOfDone : existingStory.definitionOfDone,
-      definitionOfDoneChecklist:
-        input.definitionOfDoneChecklist?.map((item) => item.label) ??
-        existingStory.definitionOfDoneChecklist.map((item) => item.label),
-    });
+      definitionOfDoneChecklist: input.definitionOfDoneChecklist ?? existingStory.definitionOfDoneChecklist,
+    };
+    const readiness = readinessForStory(proposedStory);
     const update = toDatabaseUpdate(input);
     if (!readiness.isReady && (input.boardPosition === "ready" || existingStory.boardPosition === "ready")) {
       update.board_position = "refining";
@@ -64,7 +69,7 @@ export const PATCH: APIRoute = async (context) => {
 
     if (error) return jsonError(error.message, 500);
     if (!data) return jsonError("Story not found.", 404);
-    return Response.json({ story: mapStory(data) });
+    return Response.json(storyWithReadiness(mapStory(data)));
   } catch (error) {
     if (error instanceof ZodError) return jsonError(zodMessage(error), 400);
     return jsonError("Unable to update the backlog story.", 400);

@@ -34,3 +34,5 @@ The remaining three low findings are in the Astro/Cloudflare adapter chain (`ast
 ## Manual follow-up
 
 The built landing page and `/auth/signin` route still need a browser smoke test in the latest Chrome. This is intentionally left as a manual course-review check; it cannot be proven by the build alone.
+
+**Plan-review residual (2026-07-15):** Progress items 1.3 and 2.4 closed from remediation/diff evidence already recorded above. Item 3.5 remains open; F-01 is treated as complete for unblocking product work with **accepted residual risk** that Chrome smoke is still required before public exposure.

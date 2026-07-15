@@ -1,8 +1,12 @@
 ---
 import BacklogWorkspace from "@/components/BacklogWorkspace";
 import Layout from "@/layouts/Layout.astro";
+import { SUPABASE_KEY, SUPABASE_URL } from "astro:env/server";
+
+const supabaseUrl = SUPABASE_URL ?? "";
+const supabaseAnonKey = SUPABASE_KEY ?? "";
 ---
 
 <Layout title="SecureSprint backlog">
-  <BacklogWorkspace client:load />
+  <BacklogWorkspace client:load supabaseUrl={supabaseUrl} supabaseAnonKey={supabaseAnonKey} />
 </Layout>

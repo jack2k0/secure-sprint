@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-confusing-void-expression */
 
-import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SyntheticEvent } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 import { Archive, Download, GripVertical, Plus, Save, X } from "lucide-react";
+import { isStoryEditorDirty, resolveLiveBoardUpdate, type StoryEditorSnapshot } from "@/lib/board-sync";
 import { assessStoryReadiness } from "@/lib/readiness";
 import { backlogToCsv } from "@/lib/csv";
 import {
@@ -11,6 +13,8 @@ import {
   type DefinitionOfDoneItem,
   type TeamMember,
 } from "@/types";
+
+const LIVE_POLL_MS = 4000;
 
 const POSITION_LABEL: Record<BoardPosition, string> = {
   draft: "Draft",
@@ -94,16 +98,25 @@ function StoryCard({ story, onOpen }: { story: BacklogStory; onOpen: (story: Bac
 function StoryEditor({
   story,
   members,
+  remoteStale,
+  remoteArchived,
+  onEditorStateChange,
+  onReloadFromRemote,
   onSaved,
   onArchived,
   onClose,
 }: {
   story: BacklogStory;
   members: TeamMember[];
+  remoteStale: boolean;
+  remoteArchived: boolean;
+  onEditorStateChange: (state: { dirty: boolean; draft: StoryEditorSnapshot | null }) => void;
+  onReloadFromRemote: (remote: BacklogStory) => void;
   onSaved: (story: BacklogStory) => void;
   onArchived: (id: string) => void;
   onClose: () => void;
 }) {
+  const [baseline, setBaseline] = useState(story);
   const [draft, setDraft] = useState(story);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +128,20 @@ function StoryEditor({
     definitionOfDone: draft.definitionOfDone,
     definitionOfDoneChecklist: checklistLabels(draft.definitionOfDoneChecklist),
   });
+
+  useEffect(() => {
+    const dirty = isStoryEditorDirty(baseline, draft);
+    onEditorStateChange({ dirty, draft: dirty ? draft : null });
+  }, [baseline, draft, onEditorStateChange]);
+
+  function applyRemoteStory(next: BacklogStory) {
+    setBaseline(next);
+    setDraft(next);
+    onEditorStateChange({ dirty: false, draft: null });
+    onReloadFromRemote(next);
+  }
+
+  const remoteForReload = remoteStale ? story : null;
 
   function updateText(field: "title" | "goal" | "recipientOrArea" | "description" | "definitionOfDone", value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -140,6 +167,9 @@ function StoryEditor({
         body: JSON.stringify(payload),
       });
       onSaved(response.story);
+      setBaseline(response.story);
+      setDraft(response.story);
+      onEditorStateChange({ dirty: false, draft: null });
       onClose();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save the story.");
@@ -153,7 +183,10 @@ function StoryEditor({
     setIsSaving(true);
     setError(null);
     try {
-      const response = await fetch(`/api/stories/${draft.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/stories/${draft.id}`, {
+        method: "DELETE",
+        headers: { Origin: window.location.origin },
+      });
       if (!response.ok) throw new Error("Unable to archive the story.");
       onArchived(draft.id);
       onClose();
@@ -186,6 +219,31 @@ function StoryEditor({
             <X className="size-5" />
           </button>
         </div>
+
+        {remoteArchived ? (
+          <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-medium">This story was archived elsewhere.</p>
+            <button type="button" onClick={onClose} className="mt-2 text-sm font-semibold text-cyan-800 underline">
+              Close editor
+            </button>
+          </div>
+        ) : null}
+
+        {remoteStale && !remoteArchived && remoteForReload ? (
+          <div className="mx-6 mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-medium">This story was updated elsewhere. Your unsaved edits were kept.</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => applyRemoteStory(remoteForReload)}
+                className="rounded-lg bg-cyan-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-800"
+              >
+                Reload remote version
+              </button>
+              <span className="self-center text-xs text-amber-900">or keep editing and save carefully</span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_280px]">
           <div className="space-y-5">
@@ -401,14 +459,87 @@ function StoryEditor({
   );
 }
 
-export default function BacklogWorkspace() {
+interface WorkspaceProps {
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+}
+
+export default function BacklogWorkspace({ supabaseUrl = "", supabaseAnonKey = "" }: WorkspaceProps) {
   const [stories, setStories] = useState<BacklogStory[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [selectedStory, setSelectedStory] = useState<BacklogStory | null>(null);
+  /** Latest remote copy of the open story (for reload while dirty). */
+  const [remoteSelected, setRemoteSelected] = useState<BacklogStory | null>(null);
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [staleSelected, setStaleSelected] = useState(false);
+  const [selectedArchivedRemote, setSelectedArchivedRemote] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isExportPreviewOpen, setIsExportPreviewOpen] = useState(false);
+  const [liveHint, setLiveHint] = useState<string | null>(null);
+  const storiesRef = useRef(stories);
+  const selectedIdRef = useRef<string | null>(null);
+  const editorDirtyRef = useRef(false);
+  const dirtyEditorDraftRef = useRef<StoryEditorSnapshot | null>(null);
+  const syncInFlight = useRef(false);
+
+  storiesRef.current = stories;
+  selectedIdRef.current = selectedStory?.id ?? null;
+  editorDirtyRef.current = editorDirty;
+
+  const handleEditorStateChange = useCallback((state: { dirty: boolean; draft: StoryEditorSnapshot | null }) => {
+    setEditorDirty(state.dirty);
+    editorDirtyRef.current = state.dirty;
+    dirtyEditorDraftRef.current = state.draft;
+  }, []);
+
+  const applyRemoteStories = useCallback((remoteStories: BacklogStory[]) => {
+    const result = resolveLiveBoardUpdate({
+      localStories: storiesRef.current,
+      remoteStories,
+      selectedId: selectedIdRef.current,
+      dirtyEditorDraft: dirtyEditorDraftRef.current,
+    });
+    setStories(result.stories);
+
+    if (result.selectedArchived) {
+      setSelectedArchivedRemote(true);
+      setStaleSelected(false);
+      setRemoteSelected(null);
+      return;
+    }
+
+    setSelectedArchivedRemote(false);
+
+    if (!result.selectedId || !result.selectedRemote) {
+      setStaleSelected(false);
+      setRemoteSelected(null);
+      return;
+    }
+
+    setRemoteSelected(result.selectedRemote);
+    setStaleSelected(result.staleSelected);
+
+    if (!editorDirtyRef.current) {
+      setSelectedStory(result.selectedRemote);
+    }
+  }, []);
+
+  const refreshStoriesFromApi = useCallback(async () => {
+    if (syncInFlight.current) return;
+    syncInFlight.current = true;
+    try {
+      const storyResponse = await requestJson<WorkspaceResponse>("/api/stories");
+      applyRemoteStories(storyResponse.stories);
+      setLiveHint(null);
+    } catch {
+      // Live sync is best-effort; CRUD still works offline-from-channel.
+      setLiveHint("Live board sync paused — save and refresh still work.");
+    } finally {
+      syncInFlight.current = false;
+    }
+  }, [applyRemoteStories]);
 
   useEffect(() => {
     Promise.all([requestJson<WorkspaceResponse>("/api/stories"), requestJson<MembersResponse>("/api/team-members")])
@@ -419,6 +550,43 @@ export default function BacklogWorkspace() {
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to load the workspace."))
       .finally(() => setLoading(false));
   }, []);
+
+  // Poll while the tab is visible — primary live path (works with session cookies).
+  useEffect(() => {
+    if (loading) return;
+
+    const tick = () => {
+      if (document.visibilityState === "visible") {
+        void refreshStoriesFromApi();
+      }
+    };
+
+    const id = window.setInterval(tick, LIVE_POLL_MS);
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", tick);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, [loading, refreshStoriesFromApi]);
+
+  // Optional Supabase Realtime: faster signal to refetch the same authenticated list.
+  useEffect(() => {
+    if (loading || !supabaseUrl || !supabaseAnonKey) return;
+
+    const client = createBrowserClient(supabaseUrl, supabaseAnonKey);
+    const channel = client
+      .channel("backlog-stories-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "backlog_stories" }, () => {
+        void refreshStoriesFromApi();
+      })
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [loading, supabaseUrl, supabaseAnonKey, refreshStoriesFromApi]);
 
   const storiesByPosition = useMemo(
     () =>
@@ -440,7 +608,7 @@ export default function BacklogWorkspace() {
       });
       setStories((current) => [response.story, ...current]);
       setNewTitle("");
-      setSelectedStory(response.story);
+      openStory(response.story);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to create the story.");
     }
@@ -472,6 +640,15 @@ export default function BacklogWorkspace() {
       setStories((current) => current.map((story) => (story.id === id ? previous : story)));
       setError(cause instanceof Error ? cause.message : "Unable to move the story.");
     }
+  }
+
+  function openStory(story: BacklogStory) {
+    setSelectedStory(story);
+    setRemoteSelected(story);
+    setEditorDirty(false);
+    dirtyEditorDraftRef.current = null;
+    setStaleSelected(false);
+    setSelectedArchivedRemote(false);
   }
 
   function downloadCsv() {
@@ -534,6 +711,9 @@ export default function BacklogWorkspace() {
         {error ? (
           <p className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>
         ) : null}
+        {liveHint ? (
+          <p className="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">{liveHint}</p>
+        ) : null}
         {loading ? (
           <p className="text-sm text-slate-600">Loading backlog…</p>
         ) : (
@@ -556,7 +736,7 @@ export default function BacklogWorkspace() {
                 </div>
                 <div className="space-y-3">
                   {storiesByPosition[position].map((story) => (
-                    <StoryCard key={story.id} story={story} onOpen={setSelectedStory} />
+                    <StoryCard key={story.id} story={story} onOpen={openStory} />
                   ))}
                   {storiesByPosition[position].length === 0 ? (
                     <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">
@@ -571,11 +751,45 @@ export default function BacklogWorkspace() {
       </main>
       {selectedStory ? (
         <StoryEditor
-          story={selectedStory}
+          key={
+            editorDirty || staleSelected
+              ? selectedStory.id
+              : `${selectedStory.id}:${(remoteSelected ?? selectedStory).updatedAt}`
+          }
+          story={remoteSelected ?? selectedStory}
           members={members}
-          onSaved={(story) => setStories((current) => current.map((item) => (item.id === story.id ? story : item)))}
-          onArchived={(id) => setStories((current) => current.filter((story) => story.id !== id))}
-          onClose={() => setSelectedStory(null)}
+          remoteStale={staleSelected}
+          remoteArchived={selectedArchivedRemote}
+          onEditorStateChange={handleEditorStateChange}
+          onReloadFromRemote={(remote) => {
+            setSelectedStory(remote);
+            setRemoteSelected(remote);
+            setStaleSelected(false);
+            setEditorDirty(false);
+            dirtyEditorDraftRef.current = null;
+            setStories((current) => current.map((item) => (item.id === remote.id ? remote : item)));
+          }}
+          onSaved={(story) => {
+            setStories((current) => current.map((item) => (item.id === story.id ? story : item)));
+            setSelectedStory(story);
+            setRemoteSelected(story);
+            setStaleSelected(false);
+          }}
+          onArchived={(id) => {
+            setStories((current) => current.filter((story) => story.id !== id));
+            setSelectedStory(null);
+            setRemoteSelected(null);
+            setStaleSelected(false);
+            setSelectedArchivedRemote(false);
+          }}
+          onClose={() => {
+            setSelectedStory(null);
+            setRemoteSelected(null);
+            setEditorDirty(false);
+            dirtyEditorDraftRef.current = null;
+            setStaleSelected(false);
+            setSelectedArchivedRemote(false);
+          }}
         />
       ) : null}
       {isExportPreviewOpen ? (

@@ -19,8 +19,19 @@ SecureSprint is an Astro 6 server-rendered web app with React islands, TypeScrip
 
 ## Commands and quality gate
 
-- `npm run dev` starts local development; `npm run build` is the production build check; `npm run lint` runs strict ESLint; `npm run format` applies Prettier.
-- Run `npm run lint` and `npm run build` after each implementation slice. Husky and lint-staged format staged TypeScript, Astro, JSON, CSS, and Markdown files.
-- No application test runner exists yet. Add the planned unit and end-to-end test tooling before claiming test coverage; keep tests next to their unit or in the configured end-to-end directory.
+- `npm run dev` starts local development; `npm run build` is the production build check; `npm run lint` runs strict ESLint; `npm run format` applies Prettier; `npm test` runs Vitest unit tests.
+- Run `npm run lint`, `npm test`, and `npm run build` after each implementation slice. Husky and lint-staged format staged TypeScript, Astro, JSON, CSS, and Markdown files.
+- Unit tests live next to modules (e.g. `src/lib/readiness.test.ts`). Keep readiness logic pure in `src/lib/readiness.ts`.
+- Browser E2E: Playwright under `tests/e2e/` (`npm run test:e2e`). Prefer `getByRole`, no `waitForTimeout`, auth via `playwright/.auth/` from `auth.setup.ts`. Rules: `tests/e2e/e2e-quality-rules.md`.
+
+## Agent-facing backlog API
+
+When an IDE agent (or curl) should edit SecureSprint backlog data:
+
+1. Prefer the authenticated app HTTP API documented in @README.md (section **Agent API playbook**).
+2. Obtain a demo user session via `POST /api/auth/signin` (form body) and reuse response cookies.
+3. Endpoints: `GET/POST /api/stories`, `GET/PATCH/DELETE /api/stories/:id`, `GET /api/stories/:id/readiness`.
+4. Readiness JSON is always `{ isReady, missingFields }` from `readinessForStory` → `assessStoryReadiness`. Incomplete stories cannot remain on board position `ready`.
+5. Do **not** use the Supabase service-role key as the default write path; it bypasses Zod validation and app readiness enforcement.
 
 For detailed framework conventions, authentication flow, environment variables, and Cloudflare behavior, read @CLAUDE.md before modifying those areas.

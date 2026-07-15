@@ -39,3 +39,21 @@ Run `npm test` before submitting or exporting a release candidate.
 ## Manual complement
 
 When the story detail UI exists, create an incomplete story and confirm that its visible readiness result lists exactly the same missing conditions as the evaluator.
+
+## Planned extension (post-badge)
+
+When S-06 / S-07 land, add manual checks:
+
+1. `GET` readiness (or story payload with readiness) over the HTTP API matches the UI for the same story.
+2. With `/app` open, create or patch a story via authenticated API/curl and confirm the board updates without a full page reload.
+3. With the channel disconnected, a manual refresh still shows consistent backlog data.
+
+## Browser E2E (Playwright)
+
+Command: `npm run test:e2e` (requires demo credentials in `DEMO_EMAIL` / `DEMO_PASSWORD`).
+
+| Spec | Risk |
+| --- | --- |
+| `tests/e2e/readiness-incomplete-ui.spec.ts` | Incomplete story shown as ready / missing fields hidden in UI |
+| `tests/e2e/live-board-remote-update.spec.ts` | Remote API create not visible on open board without reload (S-07) |
+| `tests/e2e/seed.spec.ts` | Auth session restore to workspace (exemplar) |

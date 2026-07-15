@@ -107,6 +107,7 @@ function StoryCard({
 
 function StoryEditor({
   story,
+  remoteStory,
   members,
   remoteStale,
   remoteArchived,
@@ -116,7 +117,10 @@ function StoryEditor({
   onArchived,
   onClose,
 }: {
+  /** Local open baseline / clean selected story (does not clobber draft while dirty). */
   story: BacklogStory;
+  /** Latest remote snapshot of the open story (for Reload when stale). */
+  remoteStory: BacklogStory | null;
   members: TeamMember[];
   remoteStale: boolean;
   remoteArchived: boolean;
@@ -154,7 +158,8 @@ function StoryEditor({
     onReloadFromRemote(next);
   }
 
-  const remoteForReload = remoteStale ? story : null;
+  /** Always the remote snapshot when stale — never the local open baseline. */
+  const remoteForReload = remoteStale && remoteStory ? remoteStory : null;
 
   function updateText(field: "title" | "goal" | "recipientOrArea" | "description" | "definitionOfDone", value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -872,7 +877,8 @@ export default function BacklogWorkspace({ supabaseUrl = "", supabaseAnonKey = "
       {selectedStory ? (
         <StoryEditor
           key={selectedStory.id}
-          story={editorDirty || staleSelected ? selectedStory : (remoteSelected ?? selectedStory)}
+          story={selectedStory}
+          remoteStory={remoteSelected}
           members={members}
           remoteStale={staleSelected}
           remoteArchived={selectedArchivedRemote}

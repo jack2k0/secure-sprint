@@ -51,4 +51,6 @@ Full server-side rendering (`output: "server"` in astro.config.mjs). All pages a
 
 ## CI
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs lint + build on every push and PR to master. Requires `SUPABASE_URL` and `SUPABASE_KEY` repository secrets for the build step.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs `npm test`, `npm run lint`, and `npm run build` on every push and PR to `main`. Requires `SUPABASE_URL` and `SUPABASE_KEY` repository secrets for the build step.
+
+A second workflow (`.github/workflows/playwright.yml`) runs the E2E suite. It exits 0 with `Skipping E2E` when `E2E_EMAIL`, `E2E_PASSWORD`, `SUPABASE_URL`, or `SUPABASE_KEY` are absent, so a green run is not by itself proof that browser tests executed.

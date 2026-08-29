@@ -145,6 +145,7 @@ The MVP has a flat permission model. It does not include separate manager and sp
 
 - Direct integration with a work-management system is out of scope; the MVP provides CSV export only.
 - An in-app LLM that rewrites stories or decides readiness is out of scope for this extension; external IDE agents may call the API, but readiness stays deterministic in application code.
+  - Post-MVP exception, shipped: `POST /api/stories/:id/ai-review` (`src/lib/ai/story-review.ts`) returns **soft** suggestions only. It never decides readiness, moves a card, or writes story fields, and it degrades to a hard-only review when `XAI_API_KEY` is absent. The non-goal above still holds for readiness itself.
 - Hosted multi-tenant agent auth (API keys per integration, OAuth for machines) is out of scope; demo user sessions or documented local auth are enough.
 - Multiple workspaces, role management, invitations, and an administration panel are out of scope; the MVP supports one small team with flat permissions.
 - Self-service registration, password reset, and email verification are out of scope; demo accounts provide the required login path.

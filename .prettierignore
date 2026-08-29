@@ -1,0 +1,17 @@
+# Build and tooling output
+dist/
+.astro/
+.wrangler/
+node_modules/
+playwright-report/
+test-results/
+package-lock.json
+
+# Local reference material, not application source
+legacy_projekt/
+.agents/
+.pnpm-store/
+tmp/
+
+# Preserved planning artifacts — reformatting these rewrites recorded evidence
+context/archive/

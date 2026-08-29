@@ -31,6 +31,9 @@ pnpm-debug.log*
 10xDevs*.pdf
 S0*.md
 tmp/
+legacy_projekt/
+.agents/
+.pnpm-store/
 
 # Playwright
 /test-results/

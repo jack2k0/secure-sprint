@@ -11,7 +11,7 @@ SecureSprint is an Astro 6 server-rendered web app with React islands, TypeScrip
   The single approved exception is the post-MVP AI story review (`src/lib/ai/story-review.ts`, `POST /api/stories/:id/ai-review`),
   which only adds **soft** suggestions. Hard readiness stays deterministic in `assessStoryReadiness`, and the endpoint degrades to a
   hard-only review when `XAI_API_KEY` is absent. Do not extend it to decide readiness, move cards, or write story fields.
-- Address the direct Astro, Supabase, and Wrangler audit findings recorded in @context/changes/bootstrap-verification/verification.md before exposing the app publicly.
+- Dependency advisories are a recorded, dated exception rather than a blocker. As of 2026-08-29 `npm audit` reports 14 findings (12 high), all reachable only through the `astro` 6 -> 7 and `@astrojs/cloudflare` 13 -> 14 majors; `npm audit fix` does not reduce the count. The app is deployed with these open. Re-check the advisories before the next dependency upgrade, and do not treat this note as permission to add new vulnerable dependencies.
 
 ## Layout and implementation
 
@@ -42,14 +42,16 @@ For detailed framework conventions, authentication flow, environment variables, 
 <!-- BEGIN @przeprogramowani/10x-cli -->
 
 ---
+
 name: 10xDevs AI Toolkit - Module 3, Lesson 4 (E2E Tests)
 description: End-to-end testing with AI tools
 license: CC BY-NC-ND 4.0
 metadata:
-  tags: AI, E2E, testing, Playwright
-  version: 1.0.0
-  module: 3
-  lesson: 4
+tags: AI, E2E, testing, Playwright
+version: 1.0.0
+module: 3
+lesson: 4
+
 ---
 
 ## 10xDevs AI Toolkit - Moduł 3, Lekcja 4 (Testy E2E)

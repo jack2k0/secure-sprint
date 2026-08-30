@@ -47,3 +47,6 @@ legacy_projekt/
 # 2026-09-14 deadline avoids publishing it where other participants can copy it.
 # Remove this entry after submitting.
 context/changes/three-certificates-readiness/
+
+# Shared reviewer, checked out by CI only
+.ai-toolkit/

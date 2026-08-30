@@ -1,0 +1,78 @@
+name: AI code review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ai-code-review-${{ github.event.pull_request.number }}
+  # Unconditional: a label event now runs a full review of its own, so a
+  # replacement run always produces a real result. The earlier exception existed
+  # because label runs used to skip the review job, and a skipped required check
+  # counts as passing. Leaving it in place let a label start a second concurrent
+  # review of the same pull request, racing the first one's comment.
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Fork pull requests get no secrets and a read-only token, so the reviewer
+    # cannot run. They are simply not reviewed here.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # The toolkit is private, so its action cannot be referenced by
+      # `owner/repo@sha` — this repository's GITHUB_TOKEN cannot see it. Check
+      # it out with a read-only token instead and use the local path. The ref is
+      # still pinned to a SHA.
+      # Pinned to a SHA, which is what makes this auditable: a rewritten history
+      # cannot produce the same commit. The toolkit is private, so read its code
+      # at github.com/jack2k0/ai-toolkit before bumping the pin.
+      - name: Fetch the shared reviewer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jack2k0/ai-toolkit
+          ref: b672e61f76728877e8c202007d0857cb1c88b480
+          token: ${{ secrets.AI_TOOLKIT_TOKEN }}
+          path: .ai-toolkit
+
+      - id: review
+        uses: ./.ai-toolkit/.github/actions/ai-code-review
+        with:
+          pr-number: ${{ github.event.pull_request.number }}
+          pr-title: ${{ github.event.pull_request.title }}
+          pr-body: ${{ github.event.pull_request.body }}
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          # The product contract and the agent rules. These turn on the
+          # business-alignment and architectural-fit criteria, which stay
+          # unscored without them.
+          context-files: |
+            context/foundation/prd.md
+            AGENTS.md
+          # Advisory here, not a merge gate. The deterministic gates for this
+          # repository are `npm test`, `npm run lint` and `npm run build` in
+          # ci.yml; the agent comments, it does not block.
+          fail-on-review: "false"
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        env:
+          STATUS: ${{ steps.review.outputs.status }}
+          VERDICT: ${{ steps.review.outputs.verdict }}
+        run: |
+          {
+            echo "### AI code review"
+            echo "- status: \`$STATUS\`"
+            echo "- verdict: \`$VERDICT\`"
+            echo "- advisory only — see ci.yml for the gates that block merge"
+          } >> "$GITHUB_STEP_SUMMARY"

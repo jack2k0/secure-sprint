@@ -32,9 +32,20 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: |
+          set -euo pipefail
           if [ -z "$DEMO_EMAIL" ] || [ -z "$DEMO_PASSWORD" ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_KEY" ]; then
-            echo "Skipping E2E: set repository secrets E2E_EMAIL, E2E_PASSWORD, SUPABASE_URL, SUPABASE_KEY"
-            exit 0
+            # Fails rather than exiting 0. A green run that executed no browser
+            # test is worse than a red one: it reads as proof the user-facing
+            # flows work, and nothing checked them.
+            echo "::error::E2E cannot run. Set repository secrets E2E_EMAIL, E2E_PASSWORD, SUPABASE_URL and SUPABASE_KEY."
+            {
+              echo "### Playwright E2E — not run"
+              echo
+              echo "Required secrets are missing, so no browser test executed."
+              echo "This job fails on purpose: a green check here would claim the"
+              echo "user-facing flows were verified when nothing looked at them."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           npx playwright test --project=setup --project=chromium
       - uses: actions/upload-artifact@v4

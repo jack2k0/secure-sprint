@@ -52,8 +52,28 @@ When S-06 / S-07 land, add manual checks:
 
 Command: `npm run test:e2e` (requires demo credentials in `DEMO_EMAIL` / `DEMO_PASSWORD`).
 
-| Spec | Risk |
-| --- | --- |
-| `tests/e2e/readiness-incomplete-ui.spec.ts` | Incomplete story shown as ready / missing fields hidden in UI |
+| Spec                                         | Risk                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| `tests/e2e/readiness-incomplete-ui.spec.ts`  | Incomplete story shown as ready / missing fields hidden in UI     |
 | `tests/e2e/live-board-remote-update.spec.ts` | Remote API create not visible on open board without reload (S-07) |
-| `tests/e2e/seed.spec.ts` | Auth session restore to workspace (exemplar) |
+| `tests/e2e/seed.spec.ts`                     | Auth session restore to workspace (exemplar)                      |
+
+## User-perspective coverage
+
+The certification requires at least one test that verifies behaviour from the user's point of view.
+The Vitest suite does not do that — it covers pure functions: the readiness rule, CSV shaping and the
+board merge. Those are the risky logic, not the experience.
+
+The Playwright specs in `tests/e2e/` are the user-perspective layer, and each one is written as
+something a person does rather than something a function returns:
+
+| Spec                                | What a user would say it checks                                          |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `seed.spec.ts`                      | a returning user lands on the board without being asked to sign in again |
+| `readiness-incomplete-ui.spec.ts`   | a new draft shows what is still missing before it can be handed over     |
+| `live-board-remote-update.spec.ts`  | a card someone else creates appears without reloading the page           |
+| `dirty-editor-stale-banner.spec.ts` | an open editor is not silently overwritten by a remote change            |
+
+They need `E2E_EMAIL`, `E2E_PASSWORD`, `SUPABASE_URL` and `SUPABASE_KEY`. Without those secrets the
+workflow fails rather than passing, because a green check that ran no browser test claims these
+flows were verified when nothing looked at them.

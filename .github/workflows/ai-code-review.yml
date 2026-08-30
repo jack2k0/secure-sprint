@@ -27,8 +27,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The toolkit is private, so its action cannot be referenced by
+      # `owner/repo@sha` — this repository's GITHUB_TOKEN cannot see it. Check
+      # it out with a read-only token instead and use the local path. The ref is
+      # still pinned to a SHA.
+      - name: Fetch the shared reviewer
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: jack2k0/ai-toolkit
+          ref: b672e61f76728877e8c202007d0857cb1c88b480
+          token: ${{ secrets.AI_TOOLKIT_TOKEN }}
+          path: .ai-toolkit
+
       - id: review
-        uses: jack2k0/ai-toolkit/.github/actions/ai-code-review@b672e61f76728877e8c202007d0857cb1c88b480
+        uses: ./.ai-toolkit/.github/actions/ai-code-review
         with:
           pr-number: ${{ github.event.pull_request.number }}
           pr-title: ${{ github.event.pull_request.title }}

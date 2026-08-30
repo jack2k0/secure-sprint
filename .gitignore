@@ -41,3 +41,9 @@ legacy_projekt/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+# Certification submission drafts — the Architect report is an artifact uploaded
+# to the 10xDevs form, and this repository is public. Keeping it out until the
+# 2026-09-14 deadline avoids publishing it where other participants can copy it.
+# Remove this entry after submitting.
+context/changes/three-certificates-readiness/

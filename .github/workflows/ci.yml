@@ -17,6 +17,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx astro sync
+      - name: Validate workflow files
+        # One file per invocation: the validator takes a single path and exits 0
+        # on a glob it never read, which would look like a passing check.
+        run: |
+          set -euo pipefail
+          for file in .github/workflows/*.yml; do
+            echo "validating $file"
+            npx --yes @action-validator/cli@latest "$file"
+          done
       - run: npm test
       - run: npm run lint
       - run: npm run build

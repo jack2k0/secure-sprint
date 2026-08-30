@@ -60,10 +60,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Summary
+        env:
+          STATUS: ${{ steps.review.outputs.status }}
+          VERDICT: ${{ steps.review.outputs.verdict }}
         run: |
           {
             echo "### AI code review"
-            echo "- status: \`${{ steps.review.outputs.status }}\`"
-            echo "- verdict: \`${{ steps.review.outputs.verdict }}\`"
+            echo "- status: \`$STATUS\`"
+            echo "- verdict: \`$VERDICT\`"
             echo "- advisory only — see ci.yml for the gates that block merge"
           } >> "$GITHUB_STEP_SUMMARY"

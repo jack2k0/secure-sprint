@@ -2,7 +2,7 @@
  * One-shot badge evidence screenshots (not part of CI suite).
  * BADGE_OUT=... DEMO_EMAIL=... DEMO_PASSWORD=... node tests/e2e/capture-badge-screenshots.mjs
  */
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -17,19 +17,21 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 
 /**
- * Forms on this app are React islands. A `fill` that lands before hydration is
- * accepted by the DOM but dropped from React state, so the form submits empty.
- * Re-fill until the controlled value sticks.
+ * Forms on this app are React islands. A `fill` before hydration is accepted by
+ * the DOM but wiped from React state on mount, so the form submits empty. Wait
+ * for React to attach its fiber to the element (the concrete hydration signal),
+ * then fill and assert the controlled value held. `waitForFunction` /
+ * `toHaveValue` use Playwright's own retry cadence, not a fixed sleep.
  */
 async function fillHydrated(locator, value) {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await locator.fill(value);
-    await page.waitForTimeout(250);
-    if ((await locator.inputValue()) === value) {
-      return;
-    }
-  }
-  throw new Error(`field never held its value after hydration retries: ${value}`);
+  const handle = await locator.elementHandle();
+  await page.waitForFunction(
+    (el) => Object.keys(el).some((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactProps$")),
+    handle,
+    { timeout: 20_000 },
+  );
+  await locator.fill(value);
+  await expect(locator).toHaveValue(value, { timeout: 5_000 });
 }
 
 await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
@@ -55,9 +57,9 @@ try {
   throw new Error(`sign-in did not reach /app (still ${page.url()}). Page text: ${shown}`);
 }
 await page.getByRole("heading", { name: /cybersecurity backlog/i }).waitFor({ timeout: 15_000 });
-// The board fetches stories and team members on mount; settling here means the
-// island has hydrated and its controlled inputs will accept a fill.
-await page.waitForLoadState("networkidle");
+// Concrete data signal: at least one seeded story card has rendered. Avoids
+// `networkidle`, which never settles once the board holds a live/poll connection.
+await page.getByText(/items to refine|Ready for Jira/i).first().waitFor({ state: "visible", timeout: 15_000 });
 
 // (a) post-login board
 await page.screenshot({ path: path.join(out, "02-post-login-board.png"), fullPage: true });

@@ -6,7 +6,7 @@ import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-const base = process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:4321";
+const base = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:4321";
 const out = process.env.BADGE_OUT || path.join(process.cwd(), "tmp", "badge-screenshots");
 const email = process.env.DEMO_EMAIL || process.env.E2E_EMAIL;
 const password = process.env.DEMO_PASSWORD || process.env.E2E_PASSWORD;
@@ -15,6 +15,22 @@ fs.mkdirSync(out, { recursive: true });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+
+/**
+ * Forms on this app are React islands. A `fill` that lands before hydration is
+ * accepted by the DOM but dropped from React state, so the form submits empty.
+ * Re-fill until the controlled value sticks.
+ */
+async function fillHydrated(locator, value) {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await locator.fill(value);
+    await page.waitForTimeout(250);
+    if ((await locator.inputValue()) === value) {
+      return;
+    }
+  }
+  throw new Error(`field never held its value after hydration retries: ${value}`);
+}
 
 await page.goto(`${base}/`, { waitUntil: "domcontentloaded" });
 await page.screenshot({ path: path.join(out, "00-landing.png"), fullPage: true });
@@ -28,18 +44,27 @@ if (!email || !password) {
   process.exit(2);
 }
 
-await page.getByLabel("Email").fill(email);
-await page.getByLabel("Password", { exact: true }).fill(password);
+await fillHydrated(page.getByLabel("Email"), email);
+await fillHydrated(page.getByLabel("Password", { exact: true }), password);
+
 await page.getByRole("button", { name: /sign in/i }).click();
-await page.waitForURL(/\/app/, { timeout: 25_000 });
+try {
+  await page.waitForURL(/\/app/, { timeout: 25_000 });
+} catch {
+  const shown = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim().slice(0, 200);
+  throw new Error(`sign-in did not reach /app (still ${page.url()}). Page text: ${shown}`);
+}
 await page.getByRole("heading", { name: /cybersecurity backlog/i }).waitFor({ timeout: 15_000 });
+// The board fetches stories and team members on mount; settling here means the
+// island has hydrated and its controlled inputs will accept a fill.
+await page.waitForLoadState("networkidle");
 
 // (a) post-login board
 await page.screenshot({ path: path.join(out, "02-post-login-board.png"), fullPage: true });
 
 // (b) story form — create draft and wait for dialog
 const title = `Badge-shot-${Date.now()}`;
-await page.getByLabel(/new backlog story/i).fill(title);
+await fillHydrated(page.getByLabel(/new backlog story/i), title);
 const createWait = page.waitForResponse(
   (r) => r.url().includes("/api/stories") && r.request().method() === "POST",
   { timeout: 15_000 },

@@ -3,14 +3,14 @@ import { describe, expect, it } from "vitest";
 import { assessStoryReadiness, readinessForStory, type StoryReadinessInput } from "./readiness";
 import type { BacklogStory } from "@/types";
 
-const readyStory: StoryReadinessInput = {
+const readyStory = {
   goal: "Protect privileged accounts from unnecessary access.",
   recipientOrArea: "Identity and access management",
   description: "Review and remove stale privileged group memberships.",
   implementationSteps: ["Export current privileged memberships.", "Remove stale access."],
   definitionOfDone: "Stale access is removed and the review evidence is attached.",
   definitionOfDoneChecklist: ["Evidence attached"],
-};
+} satisfies StoryReadinessInput;
 
 describe("assessStoryReadiness", () => {
   it("marks a story with every required planning condition as ready", () => {
@@ -62,7 +62,7 @@ describe("readinessForStory", () => {
     goal: readyStory.goal,
     recipientOrArea: readyStory.recipientOrArea,
     description: readyStory.description,
-    implementationSteps: [...(readyStory.implementationSteps ?? [])],
+    implementationSteps: [...readyStory.implementationSteps],
     definitionOfDone: readyStory.definitionOfDone,
     definitionOfDoneChecklist: [
       { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", label: "Evidence attached", completed: true },
